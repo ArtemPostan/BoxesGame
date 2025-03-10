@@ -16,11 +16,9 @@ public class InteractableBox : MonoBehaviour, IInteractable
 
     public int figuresCount = 4;
 
-    PlayerController controller;
+    PlayerController player;
 
-    Animator textAnimator; 
-
-    private Transform playerTransform;
+    Animator textAnimator;     
 
     private void Start()
     {
@@ -30,25 +28,35 @@ public class InteractableBox : MonoBehaviour, IInteractable
         shapeType = box.InnerShapeType;
         
     }
-    public void Interact(Transform playerTransform)
+    public void Interact(PlayerController player)
     {       
-        transform.localScale = new Vector3(transform.localScale.x/2, transform.localScale.y/2, transform.localScale.z / 2);
-        controller = playerTransform.GetComponent<PlayerController>();
-        controller.isBusy = true;
-        this.playerTransform = playerTransform;
-        textAnimator = controller.OpenCloseBoxText.GetComponent<Animator>();        
-        transform.SetParent(playerTransform);
+        transform.localScale = new Vector3(transform.localScale.x/2, transform.localScale.y/2, transform.localScale.z / 2);        
+        player.isBusy = true;
+        UIManager.Instance.ShowOpenTip();             
+        transform.SetParent(player.transform);
         rb.isKinematic = true;
         rb.detectCollisions = false;
         StartCoroutine(MoveAndRotate(0.5f));
     }   
 
+    public void IfDetected(PlayerController player)
+    {
+        if (player.isBusy)
+        {            
+            return;
+        } 
+        UIManager.Instance.ShowInteractTip();
+        
+    }
+
     public bool IsOpen()
     {
         if (!box.IsOpen)
         {
-            box.animator.SetTrigger("Open");           
-            controller.OpenCloseBoxText.text = "Закрыть";
+            box.animator.SetTrigger("Open");
+          
+            UIManager.Instance.TextClose();
+            //player.boxText.text = "Закрыть";
 
             if (IsFirstOpen)
             {
@@ -60,8 +68,9 @@ public class InteractableBox : MonoBehaviour, IInteractable
            
         } else
         {
-            box.animator.SetTrigger("Close");
-            controller.OpenCloseBoxText.text = "Открыть";
+            box.animator.SetTrigger("Close");            
+            UIManager.Instance.TextOpen();
+           // player.boxText.text = "Открыть";
             _isOpen = false;
             return box.IsOpen = false;
             
@@ -78,8 +87,8 @@ public class InteractableBox : MonoBehaviour, IInteractable
         while (elapsedTime < duration)
         {
             // Динамически обновляем целевую позицию и вращение
-            Vector3 targetPosition = controller.boxPlace.position;
-            Quaternion targetRotation = playerTransform.rotation;
+            Vector3 targetPosition = player.boxPlace.position;
+            Quaternion targetRotation = player.transform.rotation;
 
             // Интерполируем позицию
             transform.position = Vector3.Lerp(startPosition, targetPosition, elapsedTime / duration);
@@ -92,8 +101,8 @@ public class InteractableBox : MonoBehaviour, IInteractable
         }
 
         // Убедимся, что объект точно оказался в целевой позиции и вращении
-        transform.position = controller.boxPlace.position;
-        transform.rotation = playerTransform.rotation;
+        transform.position = player.boxPlace.position;
+        transform.rotation = player.transform.rotation;
     }
 
     public void DieAnimation()
@@ -105,5 +114,5 @@ public class InteractableBox : MonoBehaviour, IInteractable
     public void DestroyObject()
     {
         Destroy(gameObject);
-    }
+    } 
 }

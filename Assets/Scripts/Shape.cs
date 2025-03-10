@@ -49,6 +49,7 @@ public class Shape : MonoBehaviour
         Debug.Log(box.figuresCount);
         if (box.figuresCount == 0)
         {
+            UIManager.Instance.HideAllTips();
             box.DieAnimation();
         }
         Destroy(gameObject);

@@ -4,8 +4,10 @@ using TMPro;
 using UnityEditor.VersionControl;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.ProBuilder.MeshOperations;
 using UnityEngine.UI;
+using static UnityEditor.Timeline.TimelinePlaybackControls;
 
 
 public class PlayerController : MonoBehaviour
@@ -16,7 +18,7 @@ public class PlayerController : MonoBehaviour
     public float jumpDelay = 0.0f;
 
     [Header("Look Settings")]
-    public float mouseSensitivity = 100.0f;
+    public float mouseSensitivity = 1.0f;
     public Transform cameraTransform;
     public Transform boxPlace;
 
@@ -26,16 +28,18 @@ public class PlayerController : MonoBehaviour
     private bool isInteracting;
     private bool isGrounded;
     public bool isBusy = false;
+    private bool isDesktop = true;
 
     private PlayerInput playerInput;
     private Animator animator;
     public InteractableBox box;
+    [SerializeField] Joystick joystick;
+    [SerializeField] Joystick cameraJoystick;
 
 
-    [SerializeField] Image InteractableTip;
-    [SerializeField] public TextMeshProUGUI OpenCloseBoxText;
-
-
+    //[SerializeField] Image InteractableTip;
+    //[SerializeField] public GameObject OpenCloseBoxBttn;
+    //public TextMeshProUGUI boxText;
 
     public LayerMask interractLayerMask;
 
@@ -45,37 +49,47 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         playerInput = GetComponent<PlayerInput>();
         animator = GetComponentInChildren<Animator>();
-
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        //boxText = OpenCloseBoxBttn.GetComponentInChildren<TextMeshProUGUI>();
     }
 
     void Update()
     {
-        // Обработка движения
-        Vector3 move = transform.right * moveInput.x + transform.forward * moveInput.y;
-        move.Normalize(); // Нормализуем вектор, чтобы избежать ускорения при движении по диагонали
-        rb.velocity = new Vector3(move.x * movementSpeed, rb.velocity.y, move.z * movementSpeed);
+        if (!isDesktop)
+        {
+            moveInput = new Vector2(joystick.Horizontal, joystick.Vertical);
+            Vector2 cameraInput = new Vector2(cameraJoystick.Horizontal, cameraJoystick.Vertical);
+            RotateCamera(cameraInput);
+        }
+        else
+        {
 
-        // Обработка вращения камеры
-        float mouseX = lookInput.x * mouseSensitivity * Time.deltaTime;
-        float mouseY = lookInput.y * mouseSensitivity * Time.deltaTime;
-
-        transform.Rotate(Vector3.up * mouseX);
-
-        float newRotationX = cameraTransform.localEulerAngles.x - mouseY;
-        if (newRotationX > 180) newRotationX -= 360;
-        newRotationX = Mathf.Clamp(newRotationX, -90f, 90f);
-        cameraTransform.localEulerAngles = new Vector3(newRotationX, 0f, 0f);
-
+            RotateCamera(lookInput);
+        }
+        HandleMovement(moveInput);
         DetectInteractableObjects();
     }
 
+    private void HandleMovement(Vector2 input)
+    {
+        // Нормализуем вектор, чтобы избежать ускорения при движении по диагонали
+        Vector3 move = transform.right * input.x + transform.forward * input.y;
+        move.Normalize();
+
+        // Применяем движение
+        rb.velocity = new Vector3(move.x * movementSpeed, rb.velocity.y, move.z * movementSpeed);
+
+        // Обновляем анимацию
+        bool isMoving = input.magnitude > 0;
+        animator.SetBool("IsWalking", isMoving);
+    }
     public void OnMove(InputAction.CallbackContext context)
     {
-        moveInput = context.ReadValue<Vector2>();
-        bool isMoving = moveInput.magnitude > 0;
-        animator.SetBool("IsWalking", isMoving);
+        if (isDesktop)
+        {
+            // Получаем ввод с клавиатуры/геймпада
+            moveInput = context.ReadValue<Vector2>();
+            HandleMovement(moveInput);
+        }
     }
 
     public void OnLook(InputAction.CallbackContext context)
@@ -84,13 +98,40 @@ public class PlayerController : MonoBehaviour
 
     }
 
+    private void RotateCamera(Vector2 input)
+    {
+        // Вращение камеры по горизонтали (вокруг оси Y)
+        float rotationY = input.x * mouseSensitivity * Time.deltaTime;
+        transform.Rotate(Vector3.up * rotationY * 10);
+
+        // Вращение камеры по вертикали (вокруг оси X)
+        float rotationX = -input.y * mouseSensitivity * Time.deltaTime;
+        float newRotationX = cameraTransform.localEulerAngles.x + rotationX * 10;
+        if (newRotationX > 180) newRotationX -= 360;
+        newRotationX = Mathf.Clamp(newRotationX, -90f, 90f);
+        cameraTransform.localEulerAngles = new Vector3(newRotationX, 0f, 0f);
+    }
+
     public void OnJump(InputAction.CallbackContext context)
     {
         if (context.performed && isGrounded)
         {
-            animator.SetTrigger("IsJumping");
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse); // Применяем силу прыжка                      
+            PerformJump();
         }
+    }
+
+    public void OnJumpButtonClicked()
+    {
+        if (isGrounded)
+        {
+            PerformJump();
+        }
+    }
+
+    private void PerformJump()
+    {
+        animator.SetTrigger("IsJumping");
+        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
     }
 
     public void OnInteract(InputAction.CallbackContext context)
@@ -101,93 +142,48 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public void OnClickInteract()
+    {
+        InteractWithObject();
+    }
+
     private void DetectInteractableObjects()
     {
         RaycastHit hit;
         bool isHit = Physics.Raycast(cameraTransform.position, cameraTransform.forward, out hit, 3f, interractLayerMask);
 
-        // Если игрок не занят (!isBusy) и луч попал в объект на слое interractLayerMask
-        if (!isBusy && isHit)
+        if (isHit)
         {
-            
-            InteractableTip.gameObject.SetActive(true); // Показываем подсказку
-            OpenCloseBoxText.gameObject.SetActive(false); // Скрываем текст
-        }
-        // Если игрок занят (isBusy) и есть коробка (box != null)
-        else if (isBusy)
-        {           
-            if (isHit && hit.collider != null && hit.collider.GetComponent<InteractableBasket>() != null)
-            {
-                InteractableBasket interactableBasket = hit.collider.gameObject.GetComponent<InteractableBasket>();
-                
-                // Если коробка открыта (box._isOpen), показываем InteractableTip
-                if (box._isOpen && box.shapeType == interactableBasket.currentShapeType)
-                {
-                    
-                    InteractableTip.gameObject.SetActive(true); // Показываем подсказку
-                    OpenCloseBoxText.gameObject.SetActive(false); // Скрываем текст
-                }
-                else
-                {
-                    // Если коробка закрыта, скрываем InteractableTip
-                    InteractableTip.gameObject.SetActive(false); // Скрываем подсказку
-                    OpenCloseBoxText.gameObject.SetActive(true); // Скрываем текст
-                }
-            }
-            else
-            {
-                InteractableTip.gameObject.SetActive(false); // Скрываем подсказку
-                OpenCloseBoxText.gameObject.SetActive(true); // Показываем текст
-            }
-        }
-        // Во всех остальных случаях
-        else
+            IInteractable interactable = hit.collider.GetComponent<IInteractable>();           
+            interactable.IfDetected(this);            
+        } else
         {
-            InteractableTip.gameObject.SetActive(false); // Скрываем подсказку
-            OpenCloseBoxText.gameObject.SetActive(false); // Скрываем текст
+            UIManager.Instance.HideInteractTip();
         }
-    }
+    }  
     private void InteractWithObject()
     {
 
         RaycastHit hit;
-        bool isRayCastSeeInteractable = Physics.Raycast(cameraTransform.position, cameraTransform.forward, out hit, 3f, interractLayerMask);
+        bool isHit = Physics.Raycast(cameraTransform.position, cameraTransform.forward, out hit, 3f, interractLayerMask);
 
-        if (isRayCastSeeInteractable)
-        {
-            // Проверяем, смотрим ли мы на InteractableBasket и заняты ли мы (isBusy)
-            if (hit.collider.GetComponent<InteractableBasket>() && isBusy)
-            {                
-                if (box != null && box._isOpen)
+        
+            if (isHit)
+            {
+                IInteractable interactable = hit.collider.GetComponent<IInteractable>();
+                if (interactable != null)
                 {
-                    IInteractable interactable = hit.collider.gameObject.GetComponent<IInteractable>();
-                    interactable.Interact(transform);
-                } else
+                    interactable.Interact(this);
+                }
+            }
+            else
+            {
+                if (isBusy)
                 {
                     OpenBox();
                 }
             }
-            // Проверяем, смотрим ли мы на InteractableBox и не заняты ли мы (!isBusy)
-            else if (hit.collider.GetComponent<InteractableBox>() && !isBusy)
-            {
-                
-                IInteractable interactable = hit.collider.gameObject.GetComponent<IInteractable>();
-                interactable.Interact(transform);
-                box = GetComponentInChildren<InteractableBox>();
-                OpenCloseBoxText.gameObject.SetActive(true);
-                OpenCloseBoxText.text = "Открыть";
-            } else if (hit.collider.GetComponent<InteractableBasket>() && !isBusy)
-            {
-                Debug.Log("Приходите с ящиком");
-            }
-        }
-        else
-        {
-            if (isBusy)
-            {                
-                OpenBox();
-            }
-        }
+        
     }
 
     private void OpenBox()

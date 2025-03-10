@@ -16,13 +16,15 @@ public class InteractableBasket : MonoBehaviour, IInteractable
     [SerializeField] private TextMeshProUGUI CubeText;
     [SerializeField] private TextMeshProUGUI CylinderText;
 
-    public void Interact(Transform playerTransform)
+    PlayerController player;
+
+    public void Interact(PlayerController player)
     {
-        InteractableBox box = playerTransform.GetComponentInChildren<InteractableBox>();
-        PlayerController controller = playerTransform.GetComponent<PlayerController>();
-        if (controller.isBusy)
+        InteractableBox box = player.GetComponentInChildren<InteractableBox>();
+        
+        if (player.isBusy)
         {
-            boxObj = playerTransform.GetComponentInChildren<Box>();
+            boxObj = player.GetComponentInChildren<Box>();
             shapesInBox = boxObj.GetComponentsInChildren<Shape>();
             if (box.figuresCount > 0 && box._isOpen && currentShapeType == box.shapeType && box != null)
             {
@@ -32,10 +34,22 @@ public class InteractableBasket : MonoBehaviour, IInteractable
             }
             if (box.figuresCount == 0)
             {
-                controller.isBusy = false;
+                player.isBusy = false;
             }
         }        
+    }  
+
+    public void IfDetected(PlayerController player)
+    {
+        if (!player.isBusy)
+        {
+            UIManager.Instance.ShowInteractTip();
+        } else
+        {
+            UIManager.Instance.HideInteractTip();
+        }
+        
     }
 
-    
+
 }

@@ -36,8 +36,7 @@ public class Button : MonoBehaviour
         {
             collision.gameObject.transform.SetParent(null);
             animator.SetBool("IsPressed", false);
-            isPressed = false;            
-            Debug.Log("Button Released!");
+            isPressed = false;             
         }
     }
 
