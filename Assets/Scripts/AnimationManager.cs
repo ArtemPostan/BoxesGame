@@ -12,11 +12,11 @@ public class AnimationManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            return;
         }
-        else
-        {
+        
             Destroy(gameObject);
-        }
+
     }
 
     public void MoveShapeToBasket(GameObject shape, Vector3 basketCenter, InteractableBox box)
